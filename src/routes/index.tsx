@@ -1,26 +1,55 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { ExtensionPanel } from "@/components/ExtensionPanel";
+import { ChatPanel } from "@/components/ChatPanel";
+import { useVsixSession } from "@/hooks/useVsixSession";
 
 export const Route = createFileRoute("/")({
   component: Index,
+  head: () => ({
+    meta: [
+      { title: "VSIX Runner — Mock Chat UI" },
+      {
+        name: "description",
+        content:
+          "Upload a .vsix file and chat with a mocked VS Code extension runtime. No backend, no real execution — runs entirely in your browser.",
+      },
+      { property: "og:title", content: "VSIX Runner — Mock Chat UI" },
+      {
+        property: "og:description",
+        content:
+          "A browser-only chat interface that simulates running a VS Code extension.",
+      },
+    ],
+  }),
 });
 
-// IMPORTANT: Replace this placeholder. For sites with multiple pages (About, Services, Contact, etc.),
-// create separate route files (about.tsx, services.tsx, contact.tsx) — don't put all pages in this file.
-function PlaceholderIndex() {
-  return (
-    <div
-      className="flex min-h-screen items-center justify-center"
-      style={{ backgroundColor: "#fcfbf8" }}
-    >
-      <img
-        data-lovable-blank-page-placeholder="REMOVE_THIS"
-        src="https://cdn.gpteng.co/blank-app-v1.svg"
-        alt="Your app will live here!"
-      />
-    </div>
-  );
-}
-
 function Index() {
-  return <PlaceholderIndex />;
+  const {
+    extension,
+    messages,
+    installLog,
+    installing,
+    thinking,
+    installVsix,
+    sendMessage,
+    reset,
+  } = useVsixSession();
+
+  return (
+    <main className="flex h-screen w-full flex-col md:flex-row">
+      <ExtensionPanel
+        extension={extension}
+        installing={installing}
+        installLog={installLog}
+        onUpload={installVsix}
+        onReset={reset}
+      />
+      <ChatPanel
+        extension={extension}
+        messages={messages}
+        onSend={sendMessage}
+        thinking={thinking}
+      />
+    </main>
+  );
 }
