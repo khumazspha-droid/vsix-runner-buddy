@@ -105,25 +105,57 @@ export function useVsixSession() {
         content: text,
         timestamp: Date.now(),
       };
-      setMessages((prev) => [...prev, userMsg]);
+      const nextMessages = [...messages, userMsg];
+      setMessages(nextMessages);
       setThinking(true);
 
-      // Tiny delay so the typing indicator is visible
-      await new Promise((r) => setTimeout(r, 350 + Math.random() * 400));
-
       const commandId = extension.commands[0]?.id ?? `${extension.id}.ask`;
-      const reply = runCommand(extension, commandId, text);
+
+      let replyContent: string;
+      try {
+        const res = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            extension: {
+              id: extension.id,
+              displayName: extension.displayName,
+              publisher: extension.publisher,
+              version: extension.version,
+              commands: extension.commands,
+            },
+            messages: nextMessages.map((m) => ({
+              role: m.role === "bot" ? "assistant" : "user",
+              content: m.content,
+            })),
+          }),
+        });
+
+        if (!res.ok) {
+          const errBody = (await res.json().catch(() => ({}))) as {
+            error?: string;
+          };
+          replyContent = `⚠️ ${errBody.error ?? `Request failed (${res.status})`}\n\n_Falling back to mock reply:_\n\n${runCommand(extension, commandId, text)}`;
+        } else {
+          const data = (await res.json()) as { reply?: string };
+          replyContent = data.reply?.trim() || runCommand(extension, commandId, text);
+        }
+      } catch (err) {
+        console.error("chat request failed", err);
+        replyContent = `⚠️ Network error — using mock fallback.\n\n${runCommand(extension, commandId, text)}`;
+      }
+
       const botMsg: ChatMessage = {
         id: makeId(),
         role: "bot",
         commandId,
-        content: reply,
+        content: replyContent,
         timestamp: Date.now(),
       };
       setMessages((prev) => [...prev, botMsg]);
       setThinking(false);
     },
-    [extension],
+    [extension, messages],
   );
 
   const reset = useCallback(() => {
