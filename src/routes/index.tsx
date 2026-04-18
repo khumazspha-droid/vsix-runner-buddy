@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { ExtensionPanel } from "@/components/ExtensionPanel";
 import { ChatPanel } from "@/components/ChatPanel";
 import { useVsixSession } from "@/hooks/useVsixSession";
+import { useModelSettings } from "@/hooks/useModelSettings";
 
 export const Route = createFileRoute("/")({
   component: Index,
@@ -11,7 +12,7 @@ export const Route = createFileRoute("/")({
       {
         name: "description",
         content:
-          "Upload a .vsix file and chat with a mocked VS Code extension runtime. No backend, no real execution — runs entirely in your browser.",
+          "Upload a .vsix file and chat with a mocked VS Code extension runtime. Powered by Lovable AI or your local Ollama.",
       },
       { property: "og:title", content: "VSIX Runner — Mock Chat UI" },
       {
@@ -24,6 +25,7 @@ export const Route = createFileRoute("/")({
 });
 
 function Index() {
+  const { settings, update } = useModelSettings();
   const {
     extension,
     messages,
@@ -33,7 +35,7 @@ function Index() {
     installVsix,
     sendMessage,
     reset,
-  } = useVsixSession();
+  } = useVsixSession(settings);
 
   return (
     <main className="flex h-screen w-full flex-col md:flex-row">
@@ -43,6 +45,8 @@ function Index() {
         installLog={installLog}
         onUpload={installVsix}
         onReset={reset}
+        modelSettings={settings}
+        onModelSettingsChange={update}
       />
       <ChatPanel
         extension={extension}
@@ -53,3 +57,4 @@ function Index() {
     </main>
   );
 }
+

@@ -4,6 +4,8 @@ import type { InstallLogLine, LoadedExtension } from "@/lib/mockRunner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { ModelSettingsPanel } from "@/components/ModelSettingsPanel";
+import type { ModelSettings } from "@/hooks/useModelSettings";
 import { cn } from "@/lib/utils";
 
 interface ExtensionPanelProps {
@@ -12,6 +14,8 @@ interface ExtensionPanelProps {
   installLog: InstallLogLine[];
   onUpload: (file: File) => void;
   onReset: () => void;
+  modelSettings: ModelSettings;
+  onModelSettingsChange: (patch: Partial<ModelSettings>) => void;
 }
 
 export function ExtensionPanel({
@@ -20,6 +24,8 @@ export function ExtensionPanel({
   installLog,
   onUpload,
   onReset,
+  modelSettings,
+  onModelSettingsChange,
 }: ExtensionPanelProps) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -91,6 +97,9 @@ export function ExtensionPanel({
           </p>
         </div>
       )}
+
+      <ModelSettingsPanel settings={modelSettings} onChange={onModelSettingsChange} />
+
 
       {extension && (
         <div className="flex min-h-0 flex-1 flex-col">

@@ -7,6 +7,22 @@ import {
   type LoadedExtension,
 } from "@/lib/mockRunner";
 import type { ChatMessage } from "@/components/ChatPanel";
+import { chatWithOllama } from "@/lib/ollama";
+import type { ModelSettings } from "@/hooks/useModelSettings";
+
+function buildOllamaSystemPrompt(ext: LoadedExtension): string {
+  const cmds =
+    ext.commands.length > 0
+      ? ext.commands.map((c) => `- ${c.id} — ${c.title}`).join("\n")
+      : "- (no commands registered)";
+  return [
+    `You are roleplaying as a VS Code extension named "${ext.displayName}" (${ext.publisher}.${ext.id}@${ext.version}).`,
+    `You are running inside a browser-based mock VS Code runtime — there is no real editor, file system, or workspace. Stay in character but be honest if asked about your nature.`,
+    `Your registered commands are:\n${cmds}`,
+    `Respond in concise, helpful Markdown. Use code fences for code, inline backticks for command IDs. Keep replies focused — usually under 200 words.`,
+    `When the user asks for "help", list your commands and a one-line description of each.`,
+  ].join("\n\n");
+}
 
 const STORAGE_KEY = "vsix-runner.session.v1";
 
@@ -38,7 +54,7 @@ function makeId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-export function useVsixSession() {
+export function useVsixSession(modelSettings: ModelSettings) {
   const [extension, setExtension] = useState<LoadedExtension | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [installLog, setInstallLog] = useState<InstallLogLine[]>([]);
@@ -113,36 +129,58 @@ export function useVsixSession() {
 
       let replyContent: string;
       try {
-        const res = await fetch("/api/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            extension: {
-              id: extension.id,
-              displayName: extension.displayName,
-              publisher: extension.publisher,
-              version: extension.version,
-              commands: extension.commands,
-            },
-            messages: nextMessages.map((m) => ({
-              role: m.role === "bot" ? "assistant" : "user",
-              content: m.content,
-            })),
-          }),
-        });
-
-        if (!res.ok) {
-          const errBody = (await res.json().catch(() => ({}))) as {
-            error?: string;
-          };
-          replyContent = `⚠️ ${errBody.error ?? `Request failed (${res.status})`}\n\n_Falling back to mock reply:_\n\n${runCommand(extension, commandId, text)}`;
+        if (modelSettings.provider === "ollama") {
+          if (!modelSettings.ollamaModel) {
+            replyContent = `⚠️ No Ollama model selected. Pick one in the sidebar.\n\n_Mock reply:_\n\n${runCommand(extension, commandId, text)}`;
+          } else {
+            const reply = await chatWithOllama(
+              modelSettings.ollamaUrl,
+              modelSettings.ollamaModel,
+              [
+                { role: "system", content: buildOllamaSystemPrompt(extension) },
+                ...nextMessages.map((m) => ({
+                  role: (m.role === "bot" ? "assistant" : "user") as
+                    | "user"
+                    | "assistant",
+                  content: m.content,
+                })),
+              ],
+            );
+            replyContent = reply || runCommand(extension, commandId, text);
+          }
         } else {
-          const data = (await res.json()) as { reply?: string };
-          replyContent = data.reply?.trim() || runCommand(extension, commandId, text);
+          const res = await fetch("/api/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              extension: {
+                id: extension.id,
+                displayName: extension.displayName,
+                publisher: extension.publisher,
+                version: extension.version,
+                commands: extension.commands,
+              },
+              messages: nextMessages.map((m) => ({
+                role: m.role === "bot" ? "assistant" : "user",
+                content: m.content,
+              })),
+            }),
+          });
+
+          if (!res.ok) {
+            const errBody = (await res.json().catch(() => ({}))) as {
+              error?: string;
+            };
+            replyContent = `⚠️ ${errBody.error ?? `Request failed (${res.status})`}\n\n_Falling back to mock reply:_\n\n${runCommand(extension, commandId, text)}`;
+          } else {
+            const data = (await res.json()) as { reply?: string };
+            replyContent = data.reply?.trim() || runCommand(extension, commandId, text);
+          }
         }
       } catch (err) {
         console.error("chat request failed", err);
-        replyContent = `⚠️ Network error — using mock fallback.\n\n${runCommand(extension, commandId, text)}`;
+        const msg = err instanceof Error ? err.message : "Network error";
+        replyContent = `⚠️ ${msg}\n\n_Using mock fallback:_\n\n${runCommand(extension, commandId, text)}`;
       }
 
       const botMsg: ChatMessage = {
@@ -155,7 +193,7 @@ export function useVsixSession() {
       setMessages((prev) => [...prev, botMsg]);
       setThinking(false);
     },
-    [extension, messages],
+    [extension, messages, modelSettings],
   );
 
   const reset = useCallback(() => {
