@@ -98,6 +98,9 @@ export function ExtensionPanel({
         </div>
       )}
 
+      <ModelSettingsPanel settings={modelSettings} onChange={onModelSettingsChange} />
+
+
       {extension && (
         <div className="flex min-h-0 flex-1 flex-col">
           <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
